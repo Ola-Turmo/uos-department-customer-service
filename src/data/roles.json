@@ -1,0 +1,72 @@
+[
+  {
+    "roleKey": "customer-support-lead",
+    "title": "Support Lead",
+    "roleType": "manager",
+    "layer": "base",
+    "moduleScoped": false
+  },
+  {
+    "roleKey": "customer-success-lead",
+    "title": "Customer Success Lead",
+    "roleType": "manager",
+    "layer": "base",
+    "moduleScoped": false
+  },
+  {
+    "roleKey": "customer-education-specialist",
+    "title": "Education Specialist",
+    "roleType": "specialist",
+    "layer": "base",
+    "moduleScoped": false
+  },
+  {
+    "roleKey": "customer-service-reviewer",
+    "title": "Service Reviewer",
+    "roleType": "reviewer",
+    "layer": "base",
+    "moduleScoped": false
+  },
+  {
+    "roleKey": "customer-knowledge-automation-lead",
+    "title": "Knowledge & Automation Lead",
+    "roleType": "manager",
+    "layer": "autonomous-service",
+    "moduleScoped": true
+  },
+  {
+    "roleKey": "customer-triage-routing-specialist",
+    "title": "Triage & Routing Specialist",
+    "roleType": "specialist",
+    "layer": "autonomous-service",
+    "moduleScoped": true
+  },
+  {
+    "roleKey": "customer-chat-resolution-specialist",
+    "title": "Chat Resolution Specialist",
+    "roleType": "specialist",
+    "layer": "autonomous-service",
+    "moduleScoped": true
+  },
+  {
+    "roleKey": "customer-email-resolution-specialist",
+    "title": "Email Resolution Specialist",
+    "roleType": "specialist",
+    "layer": "autonomous-service",
+    "moduleScoped": true
+  },
+  {
+    "roleKey": "customer-whatsapp-resolution-specialist",
+    "title": "WhatsApp Resolution Specialist",
+    "roleType": "specialist",
+    "layer": "autonomous-service",
+    "moduleScoped": true
+  },
+  {
+    "roleKey": "customer-escalation-recovery-specialist",
+    "title": "Escalation & Recovery Specialist",
+    "roleType": "specialist",
+    "layer": "autonomous-service",
+    "moduleScoped": true
+  }
+]

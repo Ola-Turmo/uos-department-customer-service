@@ -1,0 +1,28 @@
+{
+  "bundleIds": [
+    "uos-customer",
+    "uos-customer-service-autonomy"
+  ],
+  "externalSkills": [
+    {
+      "id": "uos-external-support-docs",
+      "sourceRelativePath": "vendor/external-skills/ola-turmo/unified-skills-catalog/support-docs"
+    },
+    {
+      "id": "uos-external-feedback-synthesis",
+      "sourceRelativePath": "vendor/external-skills/ola-turmo/unified-skills-catalog/feedback-synthesis"
+    },
+    {
+      "id": "uos-external-opencli-automation-hub",
+      "sourceRelativePath": "vendor/external-skills/uos-tools/opencli-automation-hub"
+    },
+    {
+      "id": "uos-external-tandem-browser-companion",
+      "sourceRelativePath": "vendor/external-skills/uos-tools/tandem-browser-companion"
+    },
+    {
+      "id": "kurs-ing-support-guarantee-refunds",
+      "sourceRelativePath": "vendor/external-skills/kurs-ing/support-guarantee-refunds"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "jobKey": "customer-service-qa-sampling",
+    "name": "Customer Service QA Sampling",
+    "cadence": "weekly",
+    "ownerRoleKey": "customer-support-lead",
+    "projectKey": "onboard-to-value-project",
+    "goalKey": "onboard-to-value-goal"
+  },
+  {
+    "jobKey": "customer-service-weekly-knowledge-refresh",
+    "name": "Customer Service Weekly Knowledge Refresh",
+    "cadence": "weekly",
+    "ownerRoleKey": "customer-knowledge-automation-lead",
+    "projectKey": "onboard-to-value-project",
+    "goalKey": "onboard-to-value-goal"
+  }
+]

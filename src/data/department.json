@@ -1,0 +1,17 @@
+{
+  "departmentId": "customer-service",
+  "displayName": "Customer Service Department",
+  "parentFunctionId": "customer",
+  "parentExecutiveRole": "customer",
+  "moduleId": "autonomous-customer-service",
+  "summary": "Customer support delivery, knowledge automation, channel resolution, and escalations.",
+  "requiredSkillBundles": [
+    "uos-customer",
+    "uos-customer-service-autonomy",
+    "uos-connectors-composio"
+  ],
+  "missionRefs": [
+    "onboard-to-value",
+    "incident-to-resolution"
+  ]
+}
