@@ -287,3 +287,43 @@ export interface SetConnectorHealthParams {
 export interface GetConnectorHealthParams {
   toolkitId?: string;
 }
+
+// ============================================
+// QA Review Types (VAL-DEPT-CS-003)
+// ============================================
+
+export interface QAEvaluationParams {
+  agentResponseId: string;
+  agentResponse: string;
+  expectedCriteria?: string[];
+  context?: string;
+}
+
+export interface RubricScore {
+  criterion: string;
+  score: number;
+  maxScore: number;
+  passed: boolean;
+  details: string;
+}
+
+export interface QAEvaluationResult {
+  id: string;
+  agentResponseId: string;
+  overallScore: number;
+  passed: boolean;
+  rubricScores: RubricScore[];
+  feedback: string;
+  evaluatedAt: string;
+}
+
+export type QARubric = Record<string, number>; // criterion -> weight (0-100, should sum to 100)
+
+export interface QASummary {
+  totalEvaluated: number;
+  passCount: number;
+  failCount: number;
+  passRate: number; // 0-1
+  averageScore: number;
+  byCriterion: Record<string, number>;
+}

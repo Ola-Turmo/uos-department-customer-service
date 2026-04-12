@@ -1,6 +1,7 @@
 import { definePlugin, runWorker } from "@paperclipai/plugin-sdk";
 import { TriageService } from "./triage-service.js";
 import { RecurringPatternService } from "./recurring-pattern-service.js";
+import { QAService } from "./qa-service.js";
 import {
   createInitialConnectorHealthState,
   updateConnectorHealthState,
@@ -31,6 +32,7 @@ import type {
 // Initialize services
 const triageService = new TriageService();
 const recurringPatternService = new RecurringPatternService();
+const qaService = new QAService();
 
 // Connector health state (XAF-007)
 let connectorHealthState: ConnectorHealthState[] = createInitialConnectorHealthState();
@@ -538,6 +540,49 @@ const plugin = definePlugin({
         ctx.logger.error("Failed to index triage result", { error });
         return { success: false, error: String(error) };
       }
+    });
+
+    // ============================================
+    // QA Review Actions (VAL-DEPT-CS-001)
+    // ============================================
+
+    ctx.actions.register("qa.evaluate", async (params) => {
+      const p = params as unknown as { agentResponseId: string; agentResponse: string; expectedCriteria?: string[]; context?: string };
+      ctx.logger.info("QA evaluation requested", { agentResponseId: p.agentResponseId });
+      const result = qaService.evaluate({
+        agentResponseId: p.agentResponseId,
+        agentResponse: p.agentResponse,
+        expectedCriteria: p.expectedCriteria,
+        context: p.context,
+      });
+      return { evaluation: result };
+    });
+
+    ctx.actions.register("qa.getResult", async (params) => {
+      const p = params as unknown as { evaluationId: string };
+      const result = qaService.getResult(p.evaluationId);
+      return { evaluation: result ?? null };
+    });
+
+    ctx.actions.register("qa.getSummary", async () => {
+      const summary = qaService.getSummary();
+      return { summary };
+    });
+
+    ctx.actions.register("qa.setRubric", async (params) => {
+      const p = params as unknown as { weights: Record<string, number> };
+      qaService.setRubric(p.weights);
+      return { success: true };
+    });
+
+    // QA data
+    ctx.data.register("qa.getSummary", async () => {
+      return qaService.getSummary();
+    });
+
+    ctx.data.register("qa.getRecentEvaluations", async () => {
+      const summary = qaService.getSummary();
+      return { evaluations: [], totalEvaluated: summary.totalEvaluated };
     });
   },
 
