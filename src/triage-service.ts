@@ -20,6 +20,14 @@ import type {
   ResolveEscalationParams,
 } from "./types.js";
 
+import { intentClassifier, mapToIssueCategory } from "./triage/intent-classifier.js";
+import { sentimentAnalyzer } from "./triage/sentiment-analyzer.js";
+import type {
+  AIEnrichedTriageResult,
+  IntentClassificationResult,
+  SentimentResult,
+} from "./types.js";
+
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
@@ -489,10 +497,246 @@ export class TriageService {
       processedAt: now,
     };
 
-    this.state.triageResults[params.issueId] = result;
+    this.state.triageResults[params.issueId] = result as TriageResult;
     this.state.lastUpdated = now;
 
     return result;
+  }
+
+  /**
+   * AI-powered triage using intent classification and sentiment analysis
+   * VAL-DEPT-CS-001 (upgraded from keyword-based)
+   */
+  triageIssueAI(params: TriageIssueParams): AIEnrichedTriageResult {
+    const now = new Date().toISOString();
+
+    // Run intent classification and sentiment analysis
+    const intentResult = intentClassifier.classify(params.subject, params.description);
+    const sentiment = sentimentAnalyzer.analyze(`${params.subject} ${params.description}`);
+    const legacyCategory = mapToIssueCategory(intentResult.primaryIntent.intent);
+
+    // Determine priority with AI/sentiment boost
+    const priority = this.determinePriorityWithSentiment(
+      legacyCategory, params.subject, params.description, sentiment
+    );
+
+    // Determine escalation with AI insight
+    const { level: escalationLevel, rationale: escalationRationale } =
+      this.determineEscalationLevelWithAI(
+        legacyCategory, priority, params.subject, params.description, intentResult, sentiment
+      );
+
+    // AI-enhanced routing
+    const routingHint = intentClassifier.getRoutingHint(
+      intentResult.primaryIntent.intent,
+      { polarity: sentiment.polarity, intensity: sentiment.intensity }
+    );
+    const routingRecommendation = {
+      team: routingHint.team,
+      specialistRoleKey: routingHint.specialistRoleKey,
+      channel: routingHint.urgencyBoost >= 2 ? "chat" : undefined,
+    };
+
+    // Collect evidence with AI layer
+    const evidence = this.collectEvidenceWithAI(
+      params.issueId, legacyCategory, params.subject, params.description, intentResult, sentiment
+    );
+
+    // Generate AI-aware response draft
+    const suggestedResponseDraft = this.generateDraftAI(
+      params.issueId, legacyCategory, intentResult, sentiment, params.subject
+    );
+
+    // Multi-issue detection
+    const multiIssueDetected = intentResult.secondaryIntents.length > 0 &&
+      intentResult.secondaryIntents[0].confidence > 0.5;
+
+    // Priority adjustment suggestion
+    const suggestedPriorityAdjustment = this.suggestPriorityAdjustment(priority, sentiment);
+
+    const confidence: "high" | "medium" | "low" =
+      intentResult.primaryIntent.confidence >= 0.7 ? "high" :
+      intentResult.primaryIntent.confidence >= 0.4 ? "medium" : "low";
+
+    const result: AIEnrichedTriageResult = {
+      issueId: params.issueId,
+      category: legacyCategory,
+      priority,
+      confidence,
+      routingRecommendation,
+      escalationLevel,
+      escalationRationale,
+      evidence,
+      suggestedResponseDraft,
+      tags: [...new Set([...this.extractTags(intentResult), legacyCategory])],
+      processedAt: now,
+      intentClassification: intentResult,
+      sentiment,
+      multiIssueDetected,
+      suggestedPriorityAdjustment,
+    };
+
+    this.state.triageResults[params.issueId] = result as any;
+    this.state.lastUpdated = now;
+
+    return result;
+  }
+
+  private determinePriorityWithSentiment(
+    category: IssueCategory,
+    subject: string,
+    description: string,
+    sentiment: SentimentResult
+  ): IssuePriority {
+    // Use base priority logic
+    const base = determinePriority(category, subject, description);
+
+    // Sentiment escalation boost
+    if (sentiment.urgencyLevel === "critical") return "critical";
+    if (sentiment.urgencyLevel === "high" && base !== "critical") return "high";
+    if (sentiment.urgencyLevel === "medium" && base === "low") return "medium";
+
+    return base;
+  }
+
+  private determineEscalationLevelWithAI(
+    category: IssueCategory,
+    priority: IssuePriority,
+    subject: string,
+    description: string,
+    intentResult: IntentClassificationResult,
+    sentiment: SentimentResult
+  ): { level: EscalationLevel; rationale?: string } {
+    const base = determineEscalationLevel(category, priority, subject, description);
+
+    if (sentiment.escalationRisk > 0.7) {
+      return {
+        level: Math.min(3, base.level + 1) as EscalationLevel,
+        rationale: base.rationale
+          ? `${base.rationale} + AI escalation: sentiment risk ${(sentiment.escalationRisk * 100).toFixed(0)}%`
+          : `AI escalation: sentiment risk ${(sentiment.escalationRisk * 100).toFixed(0)}%`,
+      };
+    }
+
+    if (intentResult.isAmbiguous) {
+      return {
+        level: Math.min(3, base.level + 1) as EscalationLevel,
+        rationale: base.rationale
+          ? `${base.rationale} + ambiguous intent may need specialist`
+          : "Ambiguous intent: specialist review recommended",
+      };
+    }
+
+    return base;
+  }
+
+  private collectEvidenceWithAI(
+    issueId: string,
+    category: IssueCategory,
+    subject: string,
+    description: string,
+    intentResult: IntentClassificationResult,
+    sentiment: SentimentResult
+  ): TriageEvidence[] {
+    const evidence = collectEvidence(issueId, category, subject, description);
+
+    evidence.unshift({
+      id: generateId(),
+      type: "knowledge",
+      title: "AI Intent Classification",
+      description: `Primary: ${intentResult.primaryIntent.intent} (${(intentResult.primaryIntent.confidence * 100).toFixed(0)}% conf)` +
+        (intentResult.secondaryIntents.length > 0
+          ? ` | Secondary: ${intentResult.secondaryIntents.slice(0, 2).map(i => `${i.intent} (${(i.confidence * 100).toFixed(0)}%)`).join(", ")}`
+          : ""),
+      source: "Intent Classifier v1",
+      relevanceScore: intentResult.primaryIntent.confidence,
+      collectedAt: new Date().toISOString(),
+      confidence: intentResult.primaryIntent.confidence > 0.7 ? "high" : intentResult.primaryIntent.confidence > 0.4 ? "medium" : "low",
+    });
+
+    if (intentResult.isAmbiguous) {
+      evidence.push({
+        id: generateId(),
+        type: "knowledge",
+        title: "Ambiguity Detected",
+        description: `Multiple intents possible: ${intentResult.allMatches.slice(0, 3).map(i => i.intent).join(", ")}`,
+        source: "Intent Classifier v1",
+        relevanceScore: intentResult.ambiguityScore,
+        collectedAt: new Date().toISOString(),
+        confidence: "medium",
+      });
+    }
+
+    if (sentiment.escalationRisk > 0.5) {
+      evidence.push({
+        id: generateId(),
+        type: "knowledge",
+        title: "Sentiment Risk Alert",
+        description: `Escalation risk: ${(sentiment.escalationRisk * 100).toFixed(0)}% | Urgency: ${sentiment.urgencyLevel}`,
+        source: "Sentiment Analyzer v1",
+        relevanceScore: sentiment.escalationRisk,
+        collectedAt: new Date().toISOString(),
+        confidence: "high",
+      });
+    }
+
+    return evidence;
+  }
+
+  private generateDraftAI(
+    issueId: string,
+    category: IssueCategory,
+    intentResult: IntentClassificationResult,
+    sentiment: SentimentResult,
+    subject: string
+  ): ResponseDraft {
+    const base = generateResponseDraft(issueId, category, subject, []);
+
+    let tone: ResponseDraft["tone"] = base.tone;
+    if (sentiment.polarity === "negative" && sentiment.intensity > 0.6) {
+      tone = "empathetic";
+    }
+
+    let content = base.content;
+
+    if (sentiment.polarity === "negative" && sentiment.intensity > 0.6) {
+      content = "I completely understand this is frustrating, and I want to help resolve this as quickly as possible. " + content.charAt(0).toLowerCase() + content.slice(1);
+    }
+
+    if (intentResult.secondaryIntents.length > 0 && intentResult.secondaryIntents[0].confidence > 0.4) {
+      content += `\n\n[Note: This may also relate to ${intentResult.secondaryIntents[0].intent}.]`;
+    }
+
+    return { ...base, tone, content };
+  }
+
+  private extractTags(intentResult: IntentClassificationResult): string[] {
+    const tags: string[] = [intentResult.primaryIntent.intent];
+    for (const match of intentResult.secondaryIntents) {
+      if (match.confidence > 0.4) tags.push(match.intent);
+    }
+    return tags;
+  }
+
+  private suggestPriorityAdjustment(
+    currentPriority: IssuePriority,
+    sentiment: SentimentResult
+  ): { adjustedPriority: IssuePriority; reason: string; confidence: number } | undefined {
+    if (sentiment.urgencyLevel === "critical" && currentPriority !== "critical") {
+      return {
+        adjustedPriority: "critical",
+        reason: "AI detected critical urgency from sentiment",
+        confidence: sentiment.intensity,
+      };
+    }
+    if (sentiment.urgencyLevel === "high" && (currentPriority === "medium" || currentPriority === "low")) {
+      return {
+        adjustedPriority: "high",
+        reason: "AI upgraded priority based on negative sentiment intensity",
+        confidence: sentiment.intensity,
+      };
+    }
+    return undefined;
   }
 
   /**

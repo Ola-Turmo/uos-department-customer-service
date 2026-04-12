@@ -297,6 +297,7 @@ export interface QAEvaluationParams {
   agentResponse: string;
   expectedCriteria?: string[];
   context?: string;
+  agentId?: string;
 }
 
 export interface RubricScore {
@@ -326,4 +327,185 @@ export interface QASummary {
   passRate: number; // 0-1
   averageScore: number;
   byCriterion: Record<string, number>;
+}
+
+// ============================================
+// AI Intent Classification Types
+// ============================================
+
+export type IntentCategory =
+  | "billing" | "refund" | "payment" | "subscription" | "cancellation"
+  | "bug" | "technical" | "api" | "integration" | "webhook" | "crash" | "performance"
+  | "account" | "account-recovery" | "authentication" | "access-control" | "permissions"
+  | "complaint" | "dissatisfaction" | "frustration" | "escalation-request"
+  | "feature-request" | "suggestion" | "improvement"
+  | "how-to" | "documentation" | "guide" | "tutorial" | "faq"
+  | "shipping" | "delivery" | "tracking" | "delay"
+  | "returns" | "exchange" | "warranty"
+  | "data-privacy" | "gdpr" | "data-deletion" | "consent"
+  | "accessibility" | "disability" | "inclusive"
+  | "feedback" | "praise" | "testimonial"
+  | "partnership" | "business-inquiry" | "enterprise"
+  | "security" | "breach" | "vulnerability"
+  | "other";
+
+export interface IntentMatch {
+  intent: IntentCategory;
+  confidence: number; // 0-1
+  reasoning?: string;
+}
+
+export interface IntentClassificationResult {
+  primaryIntent: IntentMatch;
+  secondaryIntents: IntentMatch[]; // multi-intent detection
+  isAmbiguous: boolean; // true when top 2 intents have close confidence
+  ambiguityScore: number; // 0-1, how ambiguous
+  allMatches: IntentMatch[];
+  modelVersion: string;
+  classifiedAt: string;
+}
+
+// ============================================
+// AI Sentiment Analysis Types
+// ============================================
+
+export interface SentimentSignal {
+  keyword: string;
+  polarity: "positive" | "negative" | "neutral";
+  intensity: number; // 0-1
+}
+
+export interface SentimentResult {
+  polarity: "positive" | "negative" | "neutral";
+  intensity: number; // 0-1 overall emotional intensity
+  signals: SentimentSignal[];
+  escalationRisk: number; // 0-1, likelihood to escalate
+  urgencyLevel: "low" | "medium" | "high" | "critical";
+  summary: string;
+  analyzedAt: string;
+}
+
+// ============================================
+// AI-Enriched Triage Types
+// ============================================
+
+export interface AIEnrichedTriageResult extends TriageResult {
+  intentClassification: IntentClassificationResult;
+  sentiment: SentimentResult;
+  multiIssueDetected: boolean;
+  suggestedPriorityAdjustment?: {
+    adjustedPriority: IssuePriority;
+    reason: string;
+    confidence: number;
+  };
+}
+
+// ============================================
+// QA Learning Loop Types
+// ============================================
+
+export interface QALearningEntry {
+  id: string;
+  agentResponseId: string;
+  issueId: string;
+  issueCategory: IssueCategory;
+  initialEvaluationId: string;
+  confirmedScore: number; // human-confirmed score
+  agentId?: string;
+  createdAt: string;
+  confirmedAt: string;
+}
+
+export interface QAAgentScore {
+  agentId: string;
+  totalEvaluations: number;
+  averageScore: number;
+  passRate: number;
+  lastEvaluatedAt: string;
+}
+
+export interface LLMEvaluationResult extends Omit<QAEvaluationResult, "id" | "evaluatedAt"> {
+  reasoning: Record<string, string>; // criterion -> reasoning
+  model: string;
+  modelConfidence: number; // 0-1
+  suggestedImprovements: string[];
+}
+
+// ============================================
+// Escalation Prediction Types
+// ============================================
+
+export interface EscalationPrediction {
+  issueId: string;
+  escalationProbability: number; // 0-1
+  riskFactors: {
+    factor: string;
+    contribution: number; // 0-1, how much this factor adds to risk
+    direction: "increases" | "decreases";
+  }[];
+  predictedLevel: EscalationLevel;
+  recommendedActions: {
+    action: string;
+    rationale: string;
+    expectedImpact: number; // 0-1
+  }[];
+  confidence: number; // 0-1 in the prediction
+  modelVersion: string;
+  predictedAt: string;
+}
+
+export interface DeescalationOffer {
+  issueId: string;
+  offerType: "compensation" | "apology" | "priority" | "credit" | "refund";
+  offerText: string;
+  threshold: number; // only show if escalation probability > threshold
+  expectedEffectiveness: number; // 0-1
+}
+
+export interface SLAOptimization {
+  issueId: string;
+  category: IssueCategory;
+  priority: IssuePriority;
+  optimalResponseTime: string; // ISO duration
+  optimalResolutionTime: string;
+  escalationDeadlines: {
+    level: EscalationLevel;
+    deadline: string; // ISO datetime
+  }[];
+  channelRecommendation?: string;
+}
+
+// ============================================
+// Knowledge Graph Types
+// ============================================
+
+export interface KnowledgeNode {
+  id: string;
+  type: "issue" | "resolution" | "article" | "policy" | "product";
+  title: string;
+  content: string;
+  category?: IssueCategory;
+  tags: string[];
+  resolution?: string;
+  linkedNodeIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  resolveCount: number; // how many times this resolution helped
+  satisfactionScore: number; // 0-1 average customer satisfaction
+}
+
+export interface SimilarIssueResult {
+  sourceIssueId: string;
+  similarNodes: {
+    node: KnowledgeNode;
+    similarityScore: number; // 0-1
+    matchedKeywords: string[];
+  }[];
+  suggestedResolution?: string;
+}
+
+export interface KnowledgeGraphQuery {
+  query: string;
+  category?: IssueCategory;
+  limit?: number;
 }
