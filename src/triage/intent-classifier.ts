@@ -123,7 +123,7 @@ function classifyWithKeywords(
   }
 
   const matches: IntentMatch[] = [];
-  for (const [intent, { total, count }] of scores.entries()) {
+  for (const [intent, { total, count }] of Array.from(scores.entries())) {
     const avgConfidence = total / count;
     matches.push({ intent, confidence: Math.min(1, avgConfidence) });
   }

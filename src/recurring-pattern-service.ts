@@ -185,7 +185,7 @@ export class RecurringPatternService {
     }
 
     // Create patterns for groups exceeding minimum frequency
-    for (const [patternKey, group] of patternGroups) {
+    for (const [patternKey, group] of Array.from(patternGroups.entries())) {
       if (group.issues.length < minFrequency) continue;
 
       const now = new Date().toISOString();

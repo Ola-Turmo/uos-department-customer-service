@@ -11,7 +11,13 @@ import {
   performRuntimeHealthCheck,
   type ConnectorHealthState,
 } from "./connector-health.js";
+import { policyEngine } from "./policy/policy-engine.js";
+import { customerProfileSynthesizer, CustomerProfileSynthesizerParams } from "./customer/customer-profile.js";
+import { feedbackBus } from "./feedback/feedback-bus.js";
+import { slaEngine } from "./sla/sla-engine.js";
+import { autonomousActionExecutor } from "./autonomous-resolution/action-executor.js";
 import type {
+  IssuePriority,
   TriageIssueParams,
   CreateEscalationParams,
   ResolveEscalationParams,
@@ -28,6 +34,7 @@ import type {
   ConnectorHealthSummary,
   IssueCategory,
 } from "./types.js";
+import type { SLAHealthReport } from "./sla/sla-engine.js";
 
 // Initialize services
 const triageService = new TriageService();
@@ -36,6 +43,13 @@ const qaService = new QAService();
 
 // Connector health state (XAF-007)
 let connectorHealthState: ConnectorHealthState[] = createInitialConnectorHealthState();
+
+// Register internal feedback bus subscribers at startup
+feedbackBus.registerInternalSubscribers({
+  qaService,
+  recurringPatternService,
+  customerProfileSynthesizer,
+});
 
 const plugin = definePlugin({
   async setup(ctx) {
@@ -581,6 +595,514 @@ const plugin = definePlugin({
     ctx.data.register("qa.getRecentEvaluations", async () => {
       const summary = qaService.getSummary();
       return { evaluations: [], totalEvaluated: summary.totalEvaluated };
+    });
+
+    // ============================================
+    // Policy Engine Actions (VAL-DEPT-CS-POLICY)
+    // ============================================
+
+    /**
+     * Evaluate whether an issue can be handled autonomously
+     * VAL-DEPT-CS-POLICY
+     */
+    ctx.actions.register("policy.evaluate", async (params) => {
+      const p = params as unknown as {
+        category: IssueCategory;
+        priority: IssuePriority;
+        confidence: number;
+        estimatedRefundAmount?: number;
+        accountTier?: "standard" | "medium" | "high" | "enterprise";
+        escalationRisk?: number;
+        sentimentPolarity?: "positive" | "negative" | "neutral";
+        sentimentIntensity?: number;
+        slaBreachMinutes?: number;
+        isReopened?: boolean;
+        previousHumanEscalations?: number;
+      };
+      const evaluation = policyEngine.evaluate({
+        category: p.category,
+        priority: p.priority,
+        confidence: p.confidence,
+        estimatedRefundAmount: p.estimatedRefundAmount,
+        accountTier: p.accountTier,
+        escalationRisk: p.escalationRisk,
+        sentimentPolarity: p.sentimentPolarity,
+        sentimentIntensity: p.sentimentIntensity,
+        slaBreachMinutes: p.slaBreachMinutes,
+        isReopened: p.isReopened,
+        previousHumanEscalations: p.previousHumanEscalations,
+      });
+      return { evaluation };
+    });
+
+    /**
+     * Evaluate refund eligibility under policy
+     * VAL-DEPT-CS-POLICY
+     */
+    ctx.actions.register("policy.evaluateRefund", async (params) => {
+      const p = params as unknown as {
+        amount: number;
+        accountTier?: "standard" | "medium" | "high" | "enterprise";
+        reason: string;
+        previousRefundsCount?: number;
+        previousRefundsTotal?: number;
+      };
+      const result = policyEngine.evaluateRefund({
+        amount: p.amount,
+        accountTier: p.accountTier,
+        reason: p.reason,
+        previousRefundsCount: p.previousRefundsCount,
+        previousRefundsTotal: p.previousRefundsTotal,
+      });
+      return result;
+    });
+
+    /**
+     * Get SLA deadline for an issue
+     * VAL-DEPT-CS-SLA
+     */
+    ctx.actions.register("sla.getDeadline", async (params) => {
+      const p = params as unknown as {
+        issueId: string;
+        priority: IssuePriority;
+        category: IssueCategory;
+        accountTier?: "standard" | "medium" | "high" | "enterprise";
+        createdAt?: string;
+      };
+      const deadline = policyEngine.getSLADeadline({
+        priority: p.priority,
+        category: p.category,
+        accountTier: p.accountTier,
+        createdAt: p.createdAt,
+      });
+      return { deadline };
+    });
+
+    /**
+     * Register a ticket for SLA tracking
+     * VAL-DEPT-CS-SLA
+     */
+    ctx.actions.register("sla.register", async (params) => {
+      const p = params as unknown as {
+        issueId: string;
+        priority: IssuePriority;
+        category: IssueCategory;
+        accountTier?: "standard" | "medium" | "high" | "enterprise";
+        createdAt?: string;
+      };
+      const sla = slaEngine.registerTicket({
+        issueId: p.issueId,
+        priority: p.priority,
+        category: p.category,
+        accountTier: p.accountTier ?? "standard",
+        createdAt: p.createdAt,
+      });
+      return { sla };
+    });
+
+    /**
+     * Get SLA status for a ticket
+     * VAL-DEPT-CS-SLA
+     */
+    ctx.actions.register("sla.getStatus", async (params) => {
+      const p = params as unknown as { issueId: string };
+      const info = slaEngine.getDeadlineInfo(p.issueId);
+      return info;
+    });
+
+    /**
+     * Record response for a ticket SLA
+     * VAL-DEPT-CS-SLA
+     */
+    ctx.actions.register("sla.recordResponse", async (params) => {
+      const p = params as unknown as { issueId: string; respondedAt?: string };
+      const sla = slaEngine.recordResponse(p.issueId, p.respondedAt);
+      return { sla };
+    });
+
+    /**
+     * Record resolution for a ticket SLA
+     * VAL-DEPT-CS-SLA
+     */
+    ctx.actions.register("sla.recordResolution", async (params) => {
+      const p = params as unknown as { issueId: string; resolvedAt?: string };
+      const sla = slaEngine.recordResolution(p.issueId, p.resolvedAt);
+      return { sla };
+    });
+
+    /**
+     * Get SLA tickets needing attention (at risk or warning)
+     * VAL-DEPT-CS-SLA
+     */
+    ctx.actions.register("sla.getTicketsNeedingAttention", async () => {
+      const tickets = slaEngine.getTicketsNeedingAttention();
+      return { tickets };
+    });
+
+    /**
+     * Generate SLA health report
+     * VAL-DEPT-CS-SLA
+     */
+    ctx.actions.register("sla.generateReport", async (params) => {
+      const p = params as unknown as { periodStart: string; periodEnd: string };
+      const report = slaEngine.generateReport(p.periodStart, p.periodEnd);
+      return { report };
+    });
+
+    /**
+     * Check all active SLAs for breach risk
+     * VAL-DEPT-CS-SLA
+     */
+    ctx.actions.register("sla.checkAll", async () => {
+      const atRisk = slaEngine.checkAll();
+      return { atRisk, count: atRisk.length };
+    });
+
+    // ============================================
+    // Customer Profile Actions (VAL-DEPT-CS-CUST360)
+    // ============================================
+
+    /**
+     * Synthesize a unified customer profile
+     * VAL-DEPT-CS-CUST360
+     */
+    ctx.actions.register("customer.synthesizeProfile", async (params) => {
+      const p = params as unknown as {
+        customerId: string;
+        ticketHistory?: Array<{
+          id: string;
+          subject: string;
+          status: string;
+          createdAt: string;
+          resolvedAt?: string;
+          sentiment?: "positive" | "negative" | "neutral";
+          category?: string;
+          priority?: string;
+          wasEscalated?: boolean;
+          wasReopened?: boolean;
+          csatScore?: number;
+        }>;
+        accountData?: {
+          email: string;
+          displayName?: string;
+          companyName?: string;
+          planTier: string;
+          mrr: number;
+          totalSpent: number;
+          currency?: string;
+          createdAt: string;
+          tags?: string[];
+        };
+        billingData?: {
+          mrr: number;
+          totalSpent: number;
+          currency?: string;
+          planTier: string;
+          accountAgeDays: number;
+          billingIssues: number;
+          refundRequests: number;
+          lastInvoiceAt?: string;
+          nextInvoiceAt?: string;
+        };
+        usageData?: {
+          lastLoginAt?: string;
+          weeklyActiveHours?: number;
+          featureAdoptionScore?: number;
+        };
+        crmData?: {
+          churnRisk?: "critical" | "high" | "medium" | "low";
+          healthScore?: number;
+          tags?: string[];
+          ltv?: number;
+        };
+        currentTicket?: {
+          channel: "email" | "chat" | "whatsapp" | "phone" | "twitter" | "app";
+          subject: string;
+          createdAt: string;
+          sentiment?: { polarity: "positive" | "negative" | "neutral"; intensity: number };
+        };
+      };
+      const profile = customerProfileSynthesizer.synthesize({
+        customerId: p.customerId,
+        ticketHistory: p.ticketHistory,
+        accountData: p.accountData,
+        billingData: p.billingData,
+        usageData: p.usageData,
+        crmData: p.crmData,
+        currentTicket: p.currentTicket as CustomerProfileSynthesizerParams["currentTicket"],
+      });
+      return { profile };
+    });
+
+    // ============================================
+    // Autonomous Action Executor (VAL-DEPT-CS-AUTO)
+    // ============================================
+
+    /**
+     * Execute autonomous action for an issue
+     * VAL-DEPT-CS-AUTO
+     */
+    ctx.actions.register("autonomous.execute", async (params) => {
+      const p = params as unknown as {
+        issueId: string;
+        customerId: string;
+        channel: "email" | "chat" | "whatsapp" | "phone" | "twitter" | "app";
+        triageResult: TriageIssueParams;
+        responseDraft?: {
+          id: string;
+          tone: string;
+          content: string;
+          citations?: Array<{ evidenceId: string; quote: string }>;
+          confidence: string;
+          policyCompliant: boolean;
+          createdAt: string;
+        };
+        customerProfile?: ReturnType<typeof customerProfileSynthesizer.synthesize>;
+        estimatedRefundAmount?: number;
+        resolvedBy?: "autonomous" | "human";
+      };
+      const result = await autonomousActionExecutor.execute({
+        issueId: p.issueId,
+        customerId: p.customerId,
+        channel: p.channel,
+        triageResult: p.triageResult as any,
+        responseDraft: p.responseDraft as any,
+        customerProfile: p.customerProfile,
+        estimatedRefundAmount: p.estimatedRefundAmount,
+        resolvedBy: p.resolvedBy,
+      });
+      return { result };
+    });
+
+    // ============================================
+    // Feedback Bus Actions (VAL-DEPT-CS-FEEDBACK)
+    // ============================================
+
+    /**
+     * Emit a ticket resolved event
+     * VAL-DEPT-CS-FEEDBACK
+     */
+    ctx.actions.register("feedback.emitResolved", async (params) => {
+      const p = params as unknown as {
+        issueId: string;
+        customerId: string;
+        category: string;
+        priority: string;
+        channel: string;
+        resolutionTimeMinutes?: number;
+        triageResultJson: string;
+        qaResultJson?: string;
+        responseDraft: string;
+        resolvedBy: "autonomous" | "human";
+        estimatedRefundAmount?: number;
+      };
+      const triageResult = JSON.parse(p.triageResultJson);
+      const qaResult = p.qaResultJson ? JSON.parse(p.qaResultJson) : undefined;
+
+      await feedbackBus.emitTicketResolved({
+        issueId: p.issueId,
+        customerId: p.customerId,
+        category: p.category,
+        priority: p.priority,
+        channel: p.channel,
+        resolutionTimeMinutes: p.resolutionTimeMinutes,
+        triageResult,
+        qaResult,
+        responseDraft: p.responseDraft,
+        resolvedBy: p.resolvedBy,
+        estimatedRefundAmount: p.estimatedRefundAmount,
+      });
+
+      return { success: true };
+    });
+
+    /**
+     * Emit a ticket reopened event
+     * VAL-DEPT-CS-FEEDBACK
+     */
+    ctx.actions.register("feedback.emitReopened", async (params) => {
+      const p = params as unknown as {
+        issueId: string;
+        customerId: string;
+        originalResolutionTimeMinutes?: number;
+        timeUntilReopenMinutes?: number;
+        reason?: string;
+      };
+      await feedbackBus.emitTicketReopened({
+        issueId: p.issueId,
+        customerId: p.customerId,
+        originalResolutionTimeMinutes: p.originalResolutionTimeMinutes,
+        timeUntilReopenMinutes: p.timeUntilReopenMinutes,
+        reason: p.reason,
+      });
+      return { success: true };
+    });
+
+    /**
+     * Get recent feedback events
+     * VAL-DEPT-CS-FEEDBACK
+     */
+    ctx.actions.register("feedback.getRecent", async (params) => {
+      const p = params as unknown as { types?: string[]; limit?: number };
+      const events = feedbackBus.getRecentEvents(p.types, p.limit);
+      const counts = feedbackBus.getEventCounts();
+      return { events, counts };
+    });
+
+    /**
+     * Get feedback event counts
+     * VAL-DEPT-CS-FEEDBACK
+     */
+    ctx.actions.register("feedback.getCounts", async () => {
+      const counts = feedbackBus.getEventCounts();
+      return { counts };
+    });
+
+    // ============================================
+    // Full Autonomous Pipeline (VAL-DEPT-CS-PIPELINE)
+    // Combines triage + customer profile + SLA + policy + action
+    // ============================================
+
+    /**
+     * Run the full autonomous customer service pipeline on an issue.
+     * Returns triage, customer profile, SLA info, policy decision, and action result.
+     * VAL-DEPT-CS-PIPELINE
+     */
+    ctx.actions.register("pipeline.run", async (params) => {
+      const p = params as unknown as {
+        issueId: string;
+        customerId: string;
+        channel: "email" | "chat" | "whatsapp" | "phone" | "twitter" | "app";
+        subject: string;
+        description: string;
+        metadata?: Record<string, unknown>;
+        customerTicketHistory?: Array<{
+          id: string;
+          subject: string;
+          status: string;
+          createdAt: string;
+          resolvedAt?: string;
+          sentiment?: "positive" | "negative" | "neutral";
+          category?: string;
+          priority?: string;
+          wasEscalated?: boolean;
+          wasReopened?: boolean;
+          csatScore?: number;
+        }>;
+        customerAccountData?: {
+          email: string;
+          displayName?: string;
+          companyName?: string;
+          planTier: string;
+          mrr: number;
+          totalSpent: number;
+          createdAt: string;
+          tags?: string[];
+        };
+        customerBillingData?: {
+          mrr: number;
+          totalSpent: number;
+          planTier: string;
+          accountAgeDays: number;
+          billingIssues: number;
+          refundRequests: number;
+          lastInvoiceAt?: string;
+          nextInvoiceAt?: string;
+        };
+        estimatedRefundAmount?: number;
+      };
+
+      ctx.logger.info("Running full autonomous pipeline", { issueId: p.issueId, customerId: p.customerId });
+
+      // Step 1: Triage (AI-enriched for full sentiment + intent data)
+      const triageResult = triageService.triageIssueAI({
+        issueId: p.issueId,
+        subject: p.subject,
+        description: p.description,
+        channel: p.channel,
+        customerId: p.customerId,
+        metadata: p.metadata,
+      } as TriageIssueParams);
+
+      // Step 2: Customer profile
+      const customerProfile = customerProfileSynthesizer.synthesize({
+        customerId: p.customerId,
+        ticketHistory: p.customerTicketHistory ?? [],
+        accountData: p.customerAccountData,
+        billingData: p.customerBillingData,
+        currentTicket: {
+          channel: p.channel,
+          subject: p.subject,
+          createdAt: new Date().toISOString(),
+          sentiment: triageResult.sentiment,
+        },
+      });
+
+      // Step 3: SLA registration
+      const slaInfo = slaEngine.getDeadlineInfo(p.issueId);
+      if (!slaInfo.deadline) {
+        slaEngine.registerTicket({
+          issueId: p.issueId,
+          priority: triageResult.priority,
+          category: triageResult.category,
+          accountTier: customerProfile.accountTier,
+        });
+      }
+
+      // Step 4: Generate response draft (from triage)
+      const responseDraft = triageResult.suggestedResponseDraft
+        ? {
+            id: `draft-${p.issueId}`,
+            tone: triageResult.suggestedResponseDraft.tone,
+            content: triageResult.suggestedResponseDraft.content,
+            citations: triageResult.suggestedResponseDraft.citations ?? [],
+            confidence: triageResult.suggestedResponseDraft.confidence,
+            policyCompliant: triageResult.suggestedResponseDraft.policyCompliant,
+            createdAt: new Date().toISOString(),
+          }
+        : undefined;
+
+      // Step 5: Execute autonomous action
+      const actionResult = await autonomousActionExecutor.execute({
+        issueId: p.issueId,
+        customerId: p.customerId,
+        channel: p.channel,
+        triageResult,
+        responseDraft,
+        customerProfile,
+        estimatedRefundAmount: p.estimatedRefundAmount,
+      });
+
+      // Step 6: If autonomously closed, emit feedback event
+      if (actionResult.outcome === "autonomous_close") {
+        await feedbackBus.emitTicketResolved({
+          issueId: p.issueId,
+          customerId: p.customerId,
+          category: triageResult.category,
+          priority: triageResult.priority,
+          channel: p.channel,
+          triageResult,
+          responseDraft: responseDraft?.content ?? "",
+          resolvedBy: "autonomous",
+          sentiment: triageResult.sentiment as any,
+        });
+      }
+
+      return {
+        triageResult,
+        customerProfile: {
+          customerId: customerProfile.customerId,
+          displayName: customerProfile.displayName,
+          accountTier: customerProfile.accountTier,
+          isVip: customerProfile.isVip,
+          isChurning: customerProfile.isChurning,
+          churnRisk: customerProfile.health.churnRisk,
+          sentimentTrajectory: customerProfile.health.sentimentTrajectory,
+          tags: customerProfile.tags,
+        },
+        slaInfo: slaEngine.getDeadlineInfo(p.issueId),
+        actionResult,
+      };
     });
   },
 

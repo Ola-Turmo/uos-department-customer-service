@@ -568,7 +568,7 @@ export class TriageService {
       escalationRationale,
       evidence,
       suggestedResponseDraft,
-      tags: [...new Set([...this.extractTags(intentResult), legacyCategory])],
+      tags: Array.from(new Set([...Array.from(this.extractTags(intentResult)), legacyCategory])),
       processedAt: now,
       intentClassification: intentResult,
       sentiment,
