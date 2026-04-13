@@ -2,6 +2,8 @@ import { definePlugin, runWorker } from "@paperclipai/plugin-sdk";
 import { TriageService } from "./triage-service.js";
 import { RecurringPatternService } from "./recurring-pattern-service.js";
 import { QAService } from "./qa-service.js";
+import { intentClassifier } from "./triage/intent-classifier.js";
+import { sentimentAnalyzer } from "./triage/sentiment-analyzer.js";
 import {
   createInitialConnectorHealthState,
   updateConnectorHealthState,
@@ -307,6 +309,42 @@ const plugin = definePlugin({
     });
 
     // ============================================
+    // AI Triage Actions (VAL-DEPT-CS-001 - Phase 1)
+    // ============================================
+
+    /**
+     * AI-powered triage using intent classification and sentiment analysis
+     * VAL-DEPT-CS-001 (upgraded from keyword-based)
+     */
+    ctx.actions.register("triage.triageIssueAI", async (params) => {
+      const p = params as unknown as TriageIssueParams;
+      ctx.logger.info("AI triage request received", { issueId: p.issueId });
+      const result = triageService.triageIssueAI(p);
+      return { result };
+    });
+
+    /**
+     * Standalone intent classification using AI
+     */
+    ctx.actions.register("triage.classifyIntent", async (params) => {
+      const p = params as unknown as { subject: string; description: string };
+      ctx.logger.info("Intent classification request received");
+      const classification = intentClassifier.classify(p.subject, p.description);
+      const routingHint = intentClassifier.getRoutingHint(classification.primaryIntent.intent);
+      return { classification, routingHint };
+    });
+
+    /**
+     * Standalone sentiment analysis using AI
+     */
+    ctx.actions.register("triage.analyzeSentiment", async (params) => {
+      const p = params as unknown as { text: string };
+      ctx.logger.info("Sentiment analysis request received");
+      const sentiment = sentimentAnalyzer.analyze(p.text);
+      return { sentiment };
+    });
+
+    // ============================================
     // Escalation Actions (VAL-DEPT-CS-001)
     // ============================================
 
@@ -585,6 +623,23 @@ const plugin = definePlugin({
       const p = params as unknown as { weights: Record<string, number> };
       qaService.setRubric(p.weights);
       return { success: true };
+    });
+
+    /**
+     * LLM-based QA evaluation with explainability
+     * VAL-DEPT-CS-003 (upgraded from keyword-based)
+     */
+    ctx.actions.register("qa.evaluateWithLLM", async (params) => {
+      const p = params as unknown as { agentResponseId: string; agentResponse: string; expectedCriteria?: string[]; context?: string; agentId?: string };
+      ctx.logger.info("LLM QA evaluation requested", { agentResponseId: p.agentResponseId });
+      const result = qaService.evaluateWithLLM({
+        agentResponseId: p.agentResponseId,
+        agentResponse: p.agentResponse,
+        expectedCriteria: p.expectedCriteria,
+        context: p.context,
+        agentId: p.agentId,
+      });
+      return { evaluation: result };
     });
 
     // QA data
