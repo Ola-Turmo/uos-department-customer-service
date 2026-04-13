@@ -1,0 +1,33 @@
+{
+  "name": "@uos/department-customer-service",
+  "version": "0.1.0",
+  "description": "UOS Department Customer Service — Maximally Autonomous AI-powered customer service brain",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:autonomous": "vitest run src/autonomous-resolution",
+    "test:customer-profile": "vitest run src/customer",
+    "test:qa-evolution": "vitest run src/qa",
+    "test:predictive": "vitest run src/predictive",
+    "test:sla": "vitest run src/sla",
+    "test:knowledge": "vitest run src/knowledge",
+    "test:refund": "vitest run src/billing",
+    "test:feedback-bus": "vitest run src/feedback",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": ["customer-service", "ai", "autonomous", "uos", "paperclip"],
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

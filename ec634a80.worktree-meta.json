@@ -1,0 +1,8 @@
+{
+  "instanceId": "ec634a80",
+  "status": "abandoned",
+  "startedAt": "2026-04-13T12:01:57.933938",
+  "last_heartbeat": "2026-04-13T12:47:00.000000",
+  "currentTask": "BATCH 1 (parallel): customer-profile, feedback-bus, sla-engine, action-executor, knowledge-healer",
+  "abandonedAt": "2026-04-13T12:53:00.000000"
+}
