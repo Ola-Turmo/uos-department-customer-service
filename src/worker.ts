@@ -197,9 +197,7 @@ const plugin = definePlugin({
      * - Update health state based on actual results
      * - Return detailed limitation information if any connectors are impaired
      * 
-     * NOTE: Since we don't have real Paperclip host access, this uses a simulation
-     * approach. When host access is available, replace the simulation in
-     * connector-health.ts with actual connector API calls.
+     * NOTE: Uses real Zapier API health checks via connector-health.ts
      */
     ctx.actions.register("connector.checkHealth", async () => {
       ctx.logger.info("Performing runtime connector health check", { 
