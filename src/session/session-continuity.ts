@@ -11,21 +11,22 @@ export default class SessionContinuity {
    */
   buildSession(customerId: string, messages: ChannelMessage[]): CrossChannelSession {
     // Extract unique channels from messages
-    const channels = [...new Set(messages.map((m) => m.channel))];
+    const channelArray = messages.map((m) => m.channel);
+    const uniqueChannels = Array.from(new Set(channelArray));
 
     // Determine channel preference (most frequently used channel)
-    const channelCounts = new Map<string, number>();
+    const channelCounts = new Map<ChannelMessage['channel'], number>();
     for (const msg of messages) {
       channelCounts.set(msg.channel, (channelCounts.get(msg.channel) || 0) + 1);
     }
     let channelPreference: ChannelMessage['channel'] = 'email';
     let maxCount = 0;
-    for (const [channel, count] of channelCounts) {
+    channelCounts.forEach((count, channel) => {
       if (count > maxCount) {
         maxCount = count;
         channelPreference = channel;
       }
-    }
+    });
 
     // Sort messages by timestamp
     const sortedMessages = [...messages].sort(
@@ -41,7 +42,7 @@ export default class SessionContinuity {
     return {
       sessionId,
       customerId,
-      channels,
+      channels: uniqueChannels,
       messages: sortedMessages,
       unifiedContext,
       channelPreference,
