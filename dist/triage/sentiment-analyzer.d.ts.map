@@ -1,0 +1,1 @@
+{"version":3,"file":"sentiment-analyzer.d.ts","sourceRoot":"","sources":["../../src/triage/sentiment-analyzer.ts"],"names":[],"mappings":"AAAA,OAAO,EAAmB,KAAK,SAAS,EAAE,MAAM,UAAU,CAAC;AAe3D,MAAM,WAAW,eAAe;IAC9B,SAAS,EAAE,SAAS,CAAC;IACrB,UAAU,EAAE,MAAM,CAAC;CACpB;AAED;;;GAGG;AACH,wBAAgB,eAAe,CAAC,IAAI,EAAE,MAAM,GAAG,eAAe,CA+C7D"}

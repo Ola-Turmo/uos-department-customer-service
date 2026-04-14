@@ -252,6 +252,8 @@ export const QACategorySchema = z.enum([
   'customer_satisfaction',
 ]);
 
+export type QACategory = z.infer<typeof QACategorySchema>;
+
 export const QAEvaluationSchema = z.object({
   id: z.string(),
   ticketId: z.string(),
