@@ -43,7 +43,7 @@ async function triageNode(state: TicketState): Promise<Partial<TicketState>> {
   try {
     const { SemanticTriageEngine } = await import("../analysis/semantic-triage.js");
     const engine = new SemanticTriageEngine();
-    const triage = await engine.classify({ subject: state.ticketId, body: state.body, channel: state.channel });
+    const triage = await engine.classify({ subject: state.subject, body: state.body, channel: state.channel });
     return {
       triage,
       agentTrace: [...state.agentTrace, { agent: "triage", startTime: start, endTime: new Date().toISOString(), output: triage.category + "/" + triage.priority }],
@@ -58,11 +58,13 @@ async function churnNode(state: TicketState): Promise<Partial<TicketState>> {
   try {
     const { MLChurnScorer } = await import("../predictive/ml-churn-scorer.js");
     const scorer = new MLChurnScorer();
-    const churn = await scorer.score({
-      customerId: state.customerId ?? state.ticketId,
-      accountAge: 12, monthlySpend: 99, ticketCount: 1, lastTicketDaysAgo: 30,
-      npsScore: 7, productUsageFrequency: 0.7, supportEscalationCount: 0, paymentDelays: 0,
-    });
+    if (!state.customerId) {
+      return {
+        churn: undefined,
+        agentTrace: [...state.agentTrace, { agent: "churn", startTime: start, endTime: new Date().toISOString(), output: "skipped — no customerId" }],
+      };
+    }
+    const churn = await scorer.score({ customerId: state.customerId, accountAge: 0, monthlySpend: 0, ticketCount: 0, lastTicketDaysAgo: 0, supportEscalationCount: 0, paymentDelays: 0 });
     return {
       churn,
       agentTrace: [...state.agentTrace, { agent: "churn", startTime: start, endTime: new Date().toISOString(), output: `risk=${churn.riskLevel}` }],
@@ -78,7 +80,9 @@ async function respondNode(state: TicketState): Promise<Partial<TicketState>> {
     const { LLMResponseDrafter } = await import("../autonomous-resolution/llm-response-draft.js");
     const drafter = new LLMResponseDrafter();
     const tone = state.churn?.riskLevel === "critical" || state.churn?.riskLevel === "high" ? "empathetic" : "professional";
-    const response = await drafter.draft({ ticket: { subject: state.subject, body: state.body }, triage: state.triage!, tone });
+    const response = state.triage
+      ? await drafter.draft({ ticket: { subject: state.subject, body: state.body }, triage: state.triage, tone })
+      : { body: "Unable to draft response — triage unavailable.", confidence: 0, tone: "professional" };
     return {
       response,
       resolved: true,
