@@ -1,0 +1,22 @@
+{
+  "name": "uos-department-customer-service",
+  "version": "0.1.0",
+  "description": "AI-Native Customer Experience Engine for UOS Customer Service Department",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.22.4",
+    "@paperclipai/plugin-sdk": "^2026.403.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
