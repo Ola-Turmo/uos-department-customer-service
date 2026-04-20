@@ -5,6 +5,7 @@
  * XAF-007: Connector degradation and limitation messaging
  */
 
+import * as React from "react";
 import { usePluginAction, usePluginData, type PluginWidgetProps } from "@paperclipai/plugin-sdk/ui";
 import { useState } from "react";
 
