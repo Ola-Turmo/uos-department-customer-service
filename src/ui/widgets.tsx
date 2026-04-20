@@ -19,11 +19,16 @@ type ToolkitLimitation = {
 };
 
 type HealthData = {
-  status: "ok" | "degraded" | "error";
+  status: "ok" | "degraded" | "error" | "unknown";
   checkedAt: string;
   hasLimitations?: boolean;
   limitations?: ToolkitLimitation[];
 };
+
+function formatHealthStatus(status?: HealthData["status"]) {
+  if (status === "unknown" || !status) return "not yet verified";
+  return status;
+}
 
 type ConnectorHealthSummary = {
   overallStatus: "ok" | "degraded" | "error" | "unknown";
@@ -93,11 +98,13 @@ type UpstreamAction = {
 export function DashboardWidget(_props: PluginWidgetProps) {
   const { data, loading, error } = usePluginData<HealthData>("health");
   const ping = usePluginAction("ping");
+  const verifyConnectors = usePluginAction("connector.checkHealth");
 
   if (loading) return <div>Loading plugin health...</div>;
   if (error) return <div>Plugin error: {error.message}</div>;
 
-  const statusColor = data?.status === "ok" ? "#4caf50" : data?.status === "degraded" ? "#ff9800" : "#f44336";
+  const effectiveStatus = data?.status ?? "unknown";
+  const statusColor = effectiveStatus === "ok" ? "#4caf50" : effectiveStatus === "degraded" ? "#ff9800" : effectiveStatus === "unknown" ? "#607d8b" : "#f44336";
   const limitations = data?.limitations ?? [];
 
   return (
@@ -112,7 +119,7 @@ export function DashboardWidget(_props: PluginWidgetProps) {
           color: "white",
           fontWeight: "bold"
         }}>
-          {data?.status?.toUpperCase() ?? "UNKNOWN"}
+          {formatHealthStatus(effectiveStatus).toUpperCase()}
         </span>
       </div>
       <div>Checked: {data?.checkedAt ?? "never"}</div>
@@ -148,7 +155,10 @@ export function DashboardWidget(_props: PluginWidgetProps) {
         </div>
       )}
       
-      <button onClick={() => void ping()}>Ping Worker</button>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <button onClick={() => void ping()}>Ping Worker</button>
+        <button onClick={() => void verifyConnectors({})}>Verify Connectors</button>
+      </div>
     </div>
   );
 }
