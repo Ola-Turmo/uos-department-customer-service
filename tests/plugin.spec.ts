@@ -19,4 +19,39 @@ describe("plugin scaffold", () => {
     const action = await harness.performAction<{ pong: boolean; at: string }>("ping");
     expect(action.pong).toBe(true);
   });
+
+  it("exposes dashboard data routes for triage, escalation, patterns, and connector widgets", async () => {
+    const harness = createTestHarness({ manifest, capabilities: [...manifest.capabilities, "events.emit"] });
+    await plugin.definition.setup(harness.ctx);
+
+    const connector = await harness.getData<{
+      overallStatus: string;
+      connectors: unknown[];
+      checkedAt: string;
+    }>("connector.getHealth");
+    expect(["ok", "unknown", "degraded", "error"]).toContain(connector.overallStatus);
+    expect(Array.isArray(connector.connectors)).toBe(true);
+    expect(typeof connector.checkedAt).toBe("string");
+
+    const triageSummary = await harness.getData<{
+      totalTriaged: number;
+      pendingEscalations: number;
+      averageConfidence: number;
+    }>("triage.getSummary");
+    expect(triageSummary.totalTriaged).toBe(0);
+    expect(triageSummary.pendingEscalations).toBe(0);
+    expect(triageSummary.averageConfidence).toBe(0);
+
+    const pendingEscalations = await harness.getData<{ records: unknown[] }>("escalation.getPending");
+    expect(Array.isArray(pendingEscalations.records)).toBe(true);
+    expect(pendingEscalations.records).toHaveLength(0);
+
+    const patterns = await harness.getData<{ patterns: unknown[] }>("patterns.getAllPatterns");
+    expect(Array.isArray(patterns.patterns)).toBe(true);
+    expect(patterns.patterns).toHaveLength(0);
+
+    const openActions = await harness.getData<{ actions: unknown[] }>("patterns.getOpenActions");
+    expect(Array.isArray(openActions.actions)).toBe(true);
+    expect(openActions.actions).toHaveLength(0);
+  });
 });

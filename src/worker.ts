@@ -98,6 +98,19 @@ const plugin = definePlugin({
       return summary;
     });
 
+    // Dashboard widgets consume connector status through this key.
+    ctx.data.register("connector.getHealth", async () => {
+      const limitations = generateToolkitLimitations(connectorHealthState);
+      const overallStatus = computeDepartmentHealthStatus(connectorHealthState);
+      return {
+        overallStatus,
+        checkedAt: new Date().toISOString(),
+        connectors: connectorHealthState,
+        limitations,
+        hasLimitations: limitations.length > 0,
+      };
+    });
+
     // Ping action for testing
     ctx.actions.register("ping", async () => {
       ctx.logger.info("Ping action invoked");
@@ -308,6 +321,10 @@ const plugin = definePlugin({
       return { summary };
     });
 
+    ctx.data.register("triage.getSummary", async () => {
+      return triageService.generateTriageSummary();
+    });
+
     // ============================================
     // AI Triage Actions (VAL-DEPT-CS-001 - Phase 1)
     // ============================================
@@ -387,6 +404,10 @@ const plugin = definePlugin({
       return { records };
     });
 
+    ctx.data.register("escalation.getPending", async () => {
+      return { records: triageService.getPendingEscalations() };
+    });
+
     /**
      * Resolve an escalation
      * VAL-DEPT-CS-001
@@ -440,6 +461,10 @@ const plugin = definePlugin({
     ctx.actions.register("patterns.getAllPatterns", async () => {
       const patterns = recurringPatternService.getAllPatterns();
       return { patterns };
+    });
+
+    ctx.data.register("patterns.getAllPatterns", async () => {
+      return { patterns: recurringPatternService.getAllPatterns() };
     });
 
     /**
@@ -529,6 +554,10 @@ const plugin = definePlugin({
     ctx.actions.register("patterns.getOpenActions", async () => {
       const actions = recurringPatternService.getOpenActions();
       return { actions };
+    });
+
+    ctx.data.register("patterns.getOpenActions", async () => {
+      return { actions: recurringPatternService.getOpenActions() };
     });
 
     /**
